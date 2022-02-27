@@ -232,7 +232,9 @@ As can be seen in the above bar chart, Minnesota has the highest number of insta
 
 
 
-### 3 Is there a spatial pattern in Secchi disk depth for lakes with at least 200 observations?
+### 3) Is there a spatial pattern in Secchi disk depth for lakes with at least 200 observations?
+#### ***Student assumes that this question is trying to ask, "Is there a spatial pattern for lakes having at least 200 secchi disk depth observations?"***
+
 
 ```{r, message = FALSE, warning = FALSE}
 ## filtering chla_secchi_all to only lakes with 200+ observations, ... 
