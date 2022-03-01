@@ -1,7 +1,7 @@
 ---
 title: "Lake Water Quality Analysis"
 author: "Daniel Cleveland"
-date: "2/26/2022"
+date: "2/28/2022"
 output: html_document
 editor options: 
   chunk_output_type: console
@@ -144,7 +144,7 @@ It makes sense that as nutrient loads in the water increases, the higher the chl
 
 
 ### 2) What states have the most data? 
-***The student assumes this mean the most chla and secchi combined data, only.  Therefore the student does not factor in the doc data.***
+***The student assumes this means the most chla and secchi combined data, only.  Therefore the student does not factor in the doc data.***
 
 #### 2a) First you will need to make a lagos spatial dataset that has the total number of counts per site.
 
@@ -152,8 +152,8 @@ It makes sense that as nutrient loads in the water increases, the higher the chl
 
 chla_secchi_all <- clarity_only %>%
   filter(!is.na(chla),
-         !is.na(secchi),
-         !is.na(doc))%>%
+         !is.na(secchi))%>%
+         #!is.na(doc))%>%
   group_by(lagoslakeid) %>% 
   dplyr::mutate(COUNT = n()) %>%
   arrange(desc(COUNT))
@@ -200,26 +200,20 @@ chla_secchi_all_by_state <- st_join(spatial_wq_us, all_states,
 ```{r, message = FALSE, warning = FALSE}
 ## grouping, counting, and arranging by count:
 wq_by_state <- chla_secchi_all_by_state %>%
-                      group_by(state_name)%>%
-                      mutate(tot_obsv = n())%>%
-                      arrange(-tot_obsv)%>%
-                      filter(!is.na(state_name))  
-
-## Wittling Down to just States and observation counts:
-obsv_per_state_sf <- chla_secchi_all_by_state %>%
                       group_by(state_abbr)%>%
-                      summarise(observations = n())%>%
-                      arrange(-observations)%>%
-                      filter(!is.na(state_abbr))%>%
-                      select(state_abbr,observations)
-obsv_per_state <- st_set_geometry(obsv_per_state_sf, NULL)
+                      summarise(tot_obsv = n())%>%
+                      arrange(-tot_obsv)%>%
+                      filter(!is.na(state_abbr))
+
+## getting rid of geometry column
+cleaned_obs <- st_set_geometry(wq_by_state, NULL)
 ```
 
 
 ```{r, message = FALSE, warning = FALSE}
 ## plotting observations for comparison:
-ggplot(obsv_per_state, 
-       aes(x = reorder(state_abbr,-observations),y = observations)) +
+ggplot(cleaned_obs, 
+       aes(x = reorder(state_abbr,-tot_obsv),y = tot_obsv)) +
   geom_bar(stat="identity", width=0.5)+
   xlab("State")+
   ylab("Instances") +
@@ -233,41 +227,60 @@ As can be seen in the above bar chart, Minnesota has the highest number of insta
 
 
 ### 3) Is there a spatial pattern in Secchi disk depth for lakes with at least 200 observations?
-#### ***Student assumes that this question is trying to ask, "Is there a spatial pattern for lakes having at least 200 secchi disk depth observations?"***
+#### ***Student assumes that this question is trying to ask, "Looking at a map of mean Secchi disk depth values of lakes having more than 200 Secchi disk depth measurements, can we detect a spatial pattern in mean Secchi disk depth?"***
 
-***(This assumption is based on lack of available unique geometry data for each individual secchi observation.)***
+***(This assumption is based on lack of available unique geometry data for each individual secchi observation, and shear number of lakes having more than 200 Secchi observations)***
+
+***Also, student assumes that whether or not site has chla data is irrelevant for this question.***
 
 
 ```{r, message = FALSE, warning = FALSE}
-## filtering chla_secchi_all to only lakes with 200+ observations, ... 
-## ...then selecting only lakeid, secchi, and lake obsv (and geometry) columns
+## filtering nutr down to only lakes with 200+ secchi observations, ... 
+## ...and  selecting only lakeid, secchi, and observations columns...
 
-wq_200_plus <- chla_secchi_all_by_state%>%
-                  group_by(lagoslakeid)%>%
-                  mutate(lake_obsv = n())%>%
-                  filter(lake_obsv > 200)%>%
-                  select(lagoslakeid,secchi,lake_obsv, state_name)%>%
-                  arrange(-lake_obsv)
+sdd_only <- nutr %>%
+  select(lagoslakeid,secchi)%>%
+  filter(!is.na(secchi))%>%
+  group_by(lagoslakeid)%>%
+  mutate(lake_obsv = n())%>%
+  filter(lake_obsv > 200)%>%
+  arrange(-lake_obsv)
 
 ```
 
 ```{r,  messages = FALSE, warning = FALSE}
-## how many lakes are actually above 200 observations?
-
-wq_200_plus_summary <- wq_200_plus %>%
+## getting mean secchi disk depths for each lake id  
+sdd_means <- sdd_only %>%
                         group_by(lagoslakeid)%>%
-                        summarise(lake_obsv = n())%>%
-                        print()
-      
+                        summarise(sdd_mean = mean(secchi))
 ```
 
-There are only five lakes that have more than 200 observations of water quality data.
+
+```{r}
+##cleaning spatial lakes down to lagoslakeid and geometry:
+sp_lakes_cln <- spatial_lakes %>%
+                        select(lagoslakeid)
+
+
+##joining geometry onto the sdd means by lagoslakeid:
+sdd_means_geo <- left_join(sdd_means,sp_lakes_cln, 
+                          by = 'lagoslakeid',
+                          keep = FALSE)
+
+## converting sdd_means_geo to spatial object:
+sdd_plot <- st_as_sf(sdd_means_geo, crs=4326)
+
+```
+
 
 ```{r, message = FALSE, warning = FALSE}
-mapview(wq_200_plus)
+##  mapping the mean secchi disk depth values for all lakes having over 200 observations of secchi disk depth.
+
+mapview(sdd_plot, zcol = 'sdd_mean')
 ```
 
-As can be seen in the map all five of the lakes having more than 200 observations of water quality data are right next each other at and near Trout Lake in upper Wisconsin.
+
+As can be seen by the map of mean secchi disk depths for lakes having over 200 secchi observations, the disk depths tend to be deepest in the Northeast United States.  The secchi disk depths tend to become shallower as the lake locations move further west.
 
 
 
